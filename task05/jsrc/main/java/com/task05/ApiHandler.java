@@ -43,30 +43,31 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         DynamoDbClient dynamoDbClient = DynamoDbClient.create();
 
         try {
-
             JsonObject requestBody = jsonParser.parse(input.getBody()).getAsJsonObject();
             int principalId = requestBody.get("principalId").getAsInt();
             JsonObject content = requestBody.get("content").getAsJsonObject();
 
-
             String eventId = UUID.randomUUID().toString();
             String createdAt = Instant.now().toString();
+
+            Map<String, AttributeValue> bodyMap = new HashMap<>();
+            content.entrySet().forEach(entry -> {
+                bodyMap.put(entry.getKey(), AttributeValue.builder().s(entry.getValue().getAsString()).build());
+            });
 
             Map<String, AttributeValue> item = new HashMap<>();
             item.put("id", AttributeValue.builder().s(eventId).build());
             item.put("principalId", AttributeValue.builder().n(String.valueOf(principalId)).build());
             item.put("createdAt", AttributeValue.builder().s(createdAt).build());
-            item.put("body", AttributeValue.builder().s(content.toString()).build());
-
+            item.put("body", AttributeValue.builder().m(bodyMap).build()); // Используем m для Map
 
             PutItemRequest putItemRequest = PutItemRequest.builder()
-                .tableName(DYNAMODB_TABLE)
-                .item(item)
-                .build();
+                    .tableName(DYNAMODB_TABLE)
+                    .item(item)
+                    .build();
 
             PutItemResponse putItemResponse = dynamoDbClient.putItem(putItemRequest);
-
-
+            
             JsonObject eventResponse = new JsonObject();
             eventResponse.addProperty("id", eventId);
             eventResponse.addProperty("principalId", principalId);
@@ -78,14 +79,14 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
             responseBody.add("event", eventResponse);
 
             return new APIGatewayProxyResponseEvent()
-                .withStatusCode(201)
-                .withBody(gson.toJson(responseBody));
+                    .withStatusCode(201)
+                    .withBody(gson.toJson(responseBody));
 
         } catch (Exception e) {
             context.getLogger().log("Error: " + e.getMessage());
             return new APIGatewayProxyResponseEvent()
-                .withStatusCode(500)
-                .withBody("{\"error\": \"" + e.getMessage() + "\"}");
+                    .withStatusCode(500)
+                    .withBody("{\"error\": \"" + e.getMessage() + "\"}");
         } finally {
             dynamoDbClient.close();
         }
